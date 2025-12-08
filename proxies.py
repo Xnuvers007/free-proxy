@@ -1,10 +1,11 @@
 import requests
 from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://free-proxy-list.net/en/"
 
 def get_proxies():
-    response = requests.get(BASE_URL)
+    response = requests.get(BASE_URL, timeout=10)
     response.raise_for_status()
     
     soup = BeautifulSoup(response.text, 'html.parser')
@@ -23,7 +24,6 @@ def get_proxies():
         proxy2 = f"{ip}:{port}"
         proxies.append(proxy)
         proxies2.append(proxy2)
-        print(proxy)
     
     with open('proxy_scheme.txt', 'w') as f:
         for proxy in proxies:
@@ -33,27 +33,42 @@ def get_proxies():
         for proxy2 in proxies2:
             f.write(proxy2 + '\n')
     
-    print(f"\nTotal dengan skema: {len(proxies)} | Total tanpa skema: {len(proxies2)}")
+    print(f"Total dengan skema: {len(proxies)} | Total tanpa skema: {len(proxies2)}")
     return proxies, proxies2
 
-def get_active_proxies(proxy_list, proxy_list_no_scheme):
+def check_single_proxy(proxy_full, proxy_simple):
+    scheme = proxy_full.split('://')[0]
+    proxies = {
+        "http": f"{scheme}://{proxy_simple}",
+        "https": f"{scheme}://{proxy_simple}"
+    }
+    try:
+        r = requests.get("https://httpbin.org/ip", proxies=proxies, timeout=3)
+        if r.status_code == 200:
+            ip = r.json()['origin']
+            print(f"✅ {proxy_full}")
+            return (proxy_full, proxy_simple, True)
+    except Exception:
+        print(f"❌ {proxy_full}")
+    return (proxy_full, proxy_simple, False)
+
+def get_active_proxies(proxy_list, proxy_list_no_scheme, max_workers=50):
     working_proxies = []
     working_proxies_no_scheme = []
 
-    for proxy_full, proxy_simple in zip(proxy_list, proxy_list_no_scheme):
-        scheme = proxy_full.split('://')[0]
-        proxies = {
-            "http": f"{scheme}://{proxy_simple}",
-            "https": f"{scheme}://{proxy_simple}"
+    print(f"\nMengecek {len(proxy_list)} proxy dengan {max_workers} thread...\n")
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(check_single_proxy, proxy_full, proxy_simple): (proxy_full, proxy_simple)
+            for proxy_full, proxy_simple in zip(proxy_list, proxy_list_no_scheme)
         }
-        try:
-            r = requests.get("https://httpbin.org/ip", proxies=proxies, timeout=5)
-            if r.status_code == 200:
-                print(f"✅ Proxy hidup: {proxy_full} | IP: {r.json()['origin']}")
+        
+        for future in as_completed(futures):
+            proxy_full, proxy_simple, is_working = future.result()
+            if is_working:
                 working_proxies.append(proxy_full)
                 working_proxies_no_scheme.append(proxy_simple)
-        except Exception:
-            print(f"❌ Proxy gagal: {proxy_full}")
 
     with open('proxy_scheme_active.txt', 'w') as f:
         for proxy in working_proxies:
@@ -63,9 +78,10 @@ def get_active_proxies(proxy_list, proxy_list_no_scheme):
         for proxy in working_proxies_no_scheme:
             f.write(proxy + '\n')
 
-    print(f"\nProxy aktif tersimpan: {len(working_proxies)}")
+    print(f"\n✅ Proxy aktif tersimpan: {len(working_proxies)}/{len(proxy_list)}")
     return working_proxies, working_proxies_no_scheme
 
 
+print("Mengambil daftar proxy...")
 proxy_list, proxy_list_no_scheme = get_proxies()
 get_active_proxies(proxy_list, proxy_list_no_scheme)
