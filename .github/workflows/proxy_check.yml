@@ -1,0 +1,41 @@
+name: Proxy Checker
+
+on:
+  schedule:
+    # Cron format: minute hour day-of-month month day-of-week
+    # Setiap 10 menit
+    - cron: "*/10 * * * *"
+    # Setiap 30 menit (alternatif)
+    # - cron: "*/30 * * * *"
+  workflow_dispatch: # Bisa dijalankan manual juga
+
+jobs:
+  check-proxies:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      - name: Run Proxy Checker
+        run: python proxies.py
+
+      - name: Upload proxy files as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: proxy-files
+          path: |
+            proxy.txt
+            proxy_scheme.txt
+            proxy_active.txt
+            proxy_scheme_active.txt
