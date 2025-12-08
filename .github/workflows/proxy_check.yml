@@ -5,9 +5,12 @@ permissions:
 
 on:
   schedule:
-    # Jalankan setiap 10 menit
-    - cron: "*/11 * * * *"
-  workflow_dispatch: # Bisa dijalankan manual
+    - cron: "*/11 * * * *"  # setiap 11 menit
+  workflow_dispatch:
+
+concurrency:
+  group: proxy-checker
+  cancel-in-progress: true
 
 jobs:
   check-proxies:
@@ -28,24 +31,24 @@ jobs:
           pip install requests beautifulsoup4
 
       - name: Run Proxy Checker
-        run: python proxies.py
+        run: |
+          TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
+          echo "=== Proxy Check at $TIMESTAMP ===" >> proxy_log.txt
+          python proxies.py >> proxy_log.txt 2>&1
+          echo "=== End of Check ===" >> proxy_log.txt
 
-      - name: Upload proxy files
-        uses: actions/upload-artifact@v4
-        with:
-          name: proxy-files
-          path: |
-            proxy.txt
-            proxy_scheme.txt
-            proxy_active.txt
-            proxy_scheme_active.txt
-
-      - name: Commit and push proxy files
+      - name: Commit and push proxy files if changed
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          git add proxy.txt proxy_scheme.txt proxy_active.txt proxy_scheme_active.txt
-          git commit -m "Update proxy files [skip ci]" || echo "No changes to commit"
-          git push origin HEAD:main
+          git add proxy.txt proxy_scheme.txt proxy_active.txt proxy_scheme_active.txt proxy_log.txt
+          
+          if ! git diff --cached --quiet; then
+            git commit -m "Update proxy files and log [skip ci]"
+            git push origin HEAD:main
+          else
+            echo "Tidak ada perubahan pada proxy, skip commit."
+          fi
+          
           # git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:main
