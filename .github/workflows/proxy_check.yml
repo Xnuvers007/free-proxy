@@ -1,5 +1,8 @@
 name: Proxy Checker
 
+permissions:
+  contents: write
+
 on:
   schedule:
     # Jalankan setiap 10 menit
@@ -45,3 +48,4 @@ jobs:
           git add proxy.txt proxy_scheme.txt proxy_active.txt proxy_scheme_active.txt
           git commit -m "Update proxy files [skip ci]" || echo "No changes to commit"
           git push origin HEAD:main
+          # git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:main
